@@ -10,6 +10,11 @@ from replies import messages_chain
 from keyboards import MainKeyboard, LanguageOptionKeyboard
 
 bot = telebot.TeleBot(os.getenv('TG_BOT_TOKEN'), parse_mode=None)
+db_client = pymongo.MongoClient(
+    f"mongodb+srv://{os.getenv('MONGODB_CREDENTIALS')}@cluster0.ybjnnvs.mongodb.net/?retryWrites=true&w=majority",
+    server_api=ServerApi('1'))
+
+collection = db_client['Users']['UsersData']
 
 
 @bot.message_handler(commands=['start'])
@@ -126,10 +131,5 @@ def trigger(message):
     bot.send_message(message.chat.id, text=messages_chain[lang]['Menu'], reply_markup=MainKeyboard.langs[lang])
 
 
-if __name__ == '__main__':
-    db_client = pymongo.MongoClient(
-        f"mongodb+srv://{os.getenv('MONGODB_CREDENTIALS')}@cluster0.ybjnnvs.mongodb.net/?retryWrites=true&w=majority",
-        server_api=ServerApi('1'))
-
-    collection = db_client['Users']['UsersData']
+def main():
     bot.polling()

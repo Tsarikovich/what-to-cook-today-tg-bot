@@ -131,5 +131,5 @@ def trigger(message):
     bot.send_message(message.chat.id, text=messages_chain[lang]['Menu'], reply_markup=MainKeyboard.langs[lang])
 
 
-def main():
+def main(event=None, context=None):
     bot.polling()

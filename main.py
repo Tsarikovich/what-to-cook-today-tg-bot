@@ -1,15 +1,16 @@
+import json
 import random
-import time
 from functools import reduce
 import telebot
 import os
 import pymongo
 from pymongo.server_api import ServerApi
 from telebot import types
-from replies import messages_chain
+from replies import messages_chain, discuss_with
 from keyboards import MainKeyboard, LanguageOptionKeyboard
 
-bot = telebot.TeleBot(os.getenv('TG_BOT_TOKEN'), parse_mode=None)
+bot = telebot.TeleBot(os.getenv('TG_BOT_TOKEN'), parse_mode=None, threaded=False)
+
 db_client = pymongo.MongoClient(
     f"mongodb+srv://{os.getenv('MONGODB_CREDENTIALS')}@cluster0.ybjnnvs.mongodb.net/?retryWrites=true&w=majority",
     server_api=ServerApi('1'))
@@ -59,13 +60,12 @@ def get_random_meal(call):
         bot.send_message(call.from_user.id, text=messages_chain[lang]['Get'][1])
         return
 
-    time.sleep(1)
-    bot.send_message(call.from_user.id, text=messages_chain[lang]['Get'][2])
+    bot.send_message(call.from_user.id,
+                     text=random.choice(messages_chain[lang]['Get'][2]).format(name=random.choice(discuss_with[lang])))
+
     meal = random.choice(user_meals_list)
-    time.sleep(1)
-    bot.send_message(call.from_user.id, text=messages_chain[lang]['Get'][3] + f"*{meal}*",
+    bot.send_message(call.from_user.id, text=messages_chain[lang]['Get'][3] + f":\n💫💫💫*{meal}*💫💫💫\n",
                      parse_mode='Markdown')
-    time.sleep(1)
     bot.send_message(call.from_user.id, text=messages_chain[lang]['Get'][4])
 
 
@@ -73,13 +73,18 @@ def get_random_meal(call):
 def add_meal(call):
     lang = get_user_lang(call.from_user.id)
     message = bot.send_message(call.from_user.id, text=messages_chain[lang]['Add'][0])
-    message.lang = lang
+    # message.lang = lang
     bot.register_next_step_handler(message, read_meal_and_add)
 
 
 def read_meal_and_add(message):
-    lang = message.lang
+    lang = get_user_lang(message.from_user.id)
     meal = message.text.lower().strip()
+    if '@' in meal:
+        bot.send_message(message.from_user.id,
+                         text=messages_chain[lang]['@inmeal'])
+        return
+
     collection.update_one({'User': message.from_user.id}, {"$push": {'Meals': meal}})
     bot.send_message(message.from_user.id,
                      text=messages_chain[lang]['Add'][1])
@@ -102,7 +107,7 @@ def delete_meal(call):
                      reply_markup=delete_items_keyboard)
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('$#@!'))
+@bot.callback_query_handler(func=lambda call: '@' in call.data)
 def commit_delete(call):
     lang, meal = call.data.split('@')
     meal = meal.lower().strip()
@@ -125,11 +130,20 @@ def show_meal(call):
     bot.send_message(call.from_user.id, text=messages_chain[lang]['Show'][1] + result)
 
 
-@bot.message_handler(commands=['menu'], func=lambda m: True)
+@bot.message_handler(commands=['menu'], func=lambda text: True)
 def trigger(message):
     lang = get_user_lang(message.from_user.id)
     bot.send_message(message.chat.id, text=messages_chain[lang]['Menu'], reply_markup=MainKeyboard.langs[lang])
 
 
+def process_event(event):
+    request_body_dict = json.loads(event['body'])
+    update = telebot.types.Update.de_json(request_body_dict)
+    bot.process_new_updates([update])
+
+
 def main(event=None, context=None):
-    bot.polling()
+    process_event(event)
+    return {
+        'statusCode': 200
+    }
